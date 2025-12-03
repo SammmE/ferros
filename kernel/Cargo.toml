@@ -7,3 +7,4 @@ edition = "2024"
 bootloader_api = "0.11.13"
 uart_16550 = "0.4.0"
 x86_64 = "0.15.4"
+font8x8 = { version = "0.3.1", default-features = false, features = ["unicode"] }
