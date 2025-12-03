@@ -6,11 +6,16 @@ use core::fmt::Write;
 use font8x8::{BASIC_FONTS, UnicodeFonts};
 use x86_64::instructions::hlt;
 
-use kernel::serial::{QemuExitCode, exit_qemu, serial};
+use kernel::interrupts::init_idt;
+use kernel::serial::{QemuExitCode, exit_qemu, println_serial};
 
 entry_point!(kernel_main);
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
+    println_serial(format_args!("Kernel initialized successfully!\n"));
+    init_idt();
+    println_serial(format_args!("IDT initialized.\n"));
+
     if let Some(framebuffer) = boot_info.framebuffer.as_mut() {
         let info = framebuffer.info();
         let bytes_per_pixel = info.bytes_per_pixel;

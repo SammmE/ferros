@@ -23,3 +23,9 @@ pub fn serial() -> uart_16550::SerialPort {
     serial_port.init();
     serial_port
 }
+
+pub fn println_serial(args: core::fmt::Arguments) {
+    use core::fmt::Write;
+    let mut serial_port = serial();
+    let _ = serial_port.write_fmt(args);
+}
