@@ -26,9 +26,31 @@ This project is a journey into the world of low-level systems programming. The p
 
 You'll need the following tools to build and run FerrOS:
 
-* **Rust (nightly):** `rustup override set nightly` in the project directory.
-* **QEMU:** An emulator to run the OS (e.g., `qemu-system-x86_64`).
-* **cargo-bootimage:** `cargo install bootimage`
+1.  **Install QEMU:**
+    ```sh
+    sudo apt-get update && sudo apt-get install -y qemu-system-x86
+    ```
+
+2.  **Install Rust nightly toolchain:**
+    ```sh
+    rustup toolchain install nightly
+    rustup override set nightly
+    ```
+
+3.  **Install rust-src component:**
+    ```sh
+    rustup component add rust-src
+    ```
+
+4.  **Install llvm-tools-preview component:**
+    ```sh
+    rustup component add llvm-tools-preview
+    ```
+
+5.  **Install bootimage:**
+    ```sh
+    cargo install bootimage
+    ```
 
 ### Running
 
@@ -37,22 +59,10 @@ You'll need the following tools to build and run FerrOS:
     git clone [https://github.com/](https://github.com/)<YOUR_USERNAME>/ferros.git
     cd ferros
     ```
-2.  **Build and run:**
-    The simplest way is to use `cargo bootimage`, which will build the kernel and create a bootable disk image.
 
+2.  **Run the OS:**
     ```sh
-    cargo run
-    ```
-
-    *(Note: This requires a `.cargo/config.toml` file to be set up to use QEMU as the runner. If not, you can run manually after building.)*
-
-    **Manual Run:**
-    ```sh
-    # Build the bootable image
-    cargo bootimage
-
-    # Run with QEMU
-    qemu-system-x86_64 -drive format=raw,file=target/x86_64-ferros/debug/bootimage-ferros.bin
+    cargo run -- uefi
     ```
 
 ---
