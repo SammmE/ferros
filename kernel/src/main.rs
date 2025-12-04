@@ -2,19 +2,18 @@
 #![no_main]
 
 use bootloader_api::{BootInfo, entry_point};
-use core::fmt::Write;
 use font8x8::{BASIC_FONTS, UnicodeFonts};
 use x86_64::instructions::hlt;
 
 use kernel::interrupts::init_idt;
-use kernel::serial::{QemuExitCode, exit_qemu, println_serial};
+use kernel::serial_println;
 
 entry_point!(kernel_main);
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
-    println_serial(format_args!("Kernel initialized successfully!\n"));
+    serial_println!("Kernel initialized successfully!\n");
     init_idt();
-    println_serial(format_args!("IDT initialized.\n"));
+    serial_println!("IDT initialized.\n");
 
     if let Some(framebuffer) = boot_info.framebuffer.as_mut() {
         let info = framebuffer.info();
@@ -44,13 +43,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     loop {
         hlt();
     }
-}
-
-#[panic_handler]
-#[cfg(not(test))]
-fn panic(info: &core::panic::PanicInfo) -> ! {
-    let _ = writeln!(serial(), "PANIC: {info}");
-    exit_qemu(QemuExitCode::Failed);
 }
 
 /// Draws a single character to the framebuffer
