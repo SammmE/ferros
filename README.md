@@ -80,8 +80,8 @@ This is the high-level plan for FerrOS, from a "Hello, World!" kernel to a basic
 * [x] **Panic Handler:** Implement a kernel panic function that prints info and halts.
 
 ### Phase 2: Interrupts & Memory Management
-* [ ] **GDT (Global Descriptor Table):** Set up a basic GDT.
-* [ ] **IDT (Interrupt Descriptor Table):** Implement an IDT to handle CPU exceptions (e.g., page faults, double faults).
+* [x] **GDT (Global Descriptor Table):** Set up a basic GDT.
+* [x] **IDT (Interrupt Descriptor Table):** Implement an IDT to handle CPU exceptions (e.g., page faults, double faults).
 * [ ] **Paging (Paging V4):** Implement a virtual memory manager, including mapping the kernel and setting up page tables.
 * [ ] **Heap Allocator:** Provide a global allocator (like `linked_list_allocator`) to enable using `alloc` (e.g., `Box`, `Vec`).
 * [ ] **Physical Frame Allocator:** Create an allocator to manage physical memory frames (e.g., a simple bitmap or free list).
