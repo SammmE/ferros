@@ -1,3 +1,4 @@
+use crate::print;
 use crate::serial_print;
 use crate::serial_println;
 use lazy_static::lazy_static;
@@ -125,6 +126,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
             match key {
                 DecodedKey::Unicode(character) => {
                     serial_print!("{}", character);
+                    print!("{}", character);
                 }
                 DecodedKey::RawKey(key) => {
                     serial_print!("{:?}", key);
