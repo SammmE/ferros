@@ -4,7 +4,7 @@
 extern crate alloc;
 
 pub mod allocator;
-pub mod console;
+pub mod framebuffer;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
