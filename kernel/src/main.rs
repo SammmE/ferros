@@ -6,7 +6,7 @@ extern crate alloc;
 use bootloader_api::{BootInfo, BootloaderConfig, config::Mapping, entry_point};
 use font8x8::{BASIC_FONTS, UnicodeFonts};
 use futures_util::stream::StreamExt;
-use pc_keyboard::{DecodedKey, HandleControl, Keyboard, ScancodeSet1, layouts};
+use pc_keyboard::{DecodedKey, HandleControl, KeyCode, Keyboard, ScancodeSet1, layouts};
 use x86_64::VirtAddr;
 
 use kernel::allocator;
@@ -50,6 +50,7 @@ async fn print_keypresses() {
             if let Some(key) = keyboard.process_keyevent(key_event) {
                 match key {
                     DecodedKey::Unicode(character) => print!("{}", character),
+                    DecodedKey::RawKey(KeyCode::Backspace) => print!("\x08"),
                     DecodedKey::RawKey(key) => print!("{:?}", key),
                 }
             }
