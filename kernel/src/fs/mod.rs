@@ -10,7 +10,7 @@ pub static DRIVE: Mutex<Option<AtaDrive>> = Mutex::new(None);
 pub static FILESYSTEM: Mutex<Option<Fat32Driver>> = Mutex::new(None);
 
 pub fn init_fs() {
-    let drive = AtaDrive::new(Bus::Primary);
+    let drive = AtaDrive::new(Bus::Primary, false);
 
     let driver = Fat32Driver::new(drive);
 

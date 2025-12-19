@@ -31,15 +31,15 @@ pub struct AtaDrive {
     drive_select_port: Port<u8>,
     command_port: PortWriteOnly<u8>,
     status_port: PortReadOnly<u8>,
+    is_master: bool,
 }
 
 impl AtaDrive {
-    pub fn new(bus: Bus) -> Self {
+    pub fn new(bus: Bus, is_master: bool) -> Self {
         let base = bus as u16;
 
         Self {
             data_port: Port::new(base),
-            // FIX: Use PortReadOnly::new / PortWriteOnly::new
             error_port: PortReadOnly::new(base + 1),
             sector_count_port: Port::new(base + 2),
             lba_low_port: Port::new(base + 3),
@@ -48,6 +48,7 @@ impl AtaDrive {
             drive_select_port: Port::new(base + 6),
             command_port: PortWriteOnly::new(base + 7),
             status_port: PortReadOnly::new(base + 7),
+            is_master, // <--- Store it
         }
     }
 
@@ -58,9 +59,16 @@ impl AtaDrive {
 
         self.wait_busy();
 
+        // Determine Selection Byte
+        // 0xE0 = Master, 0xF0 = Slave
+        let drive_select = if self.is_master { 0xE0 } else { 0xF0 };
+
         unsafe {
+            //
+            // Bit 4 selects drive (0=Master, 1=Slave)
+            // Bits 5 and 7 are usually fixed to 1 (0xA0 or 0xE0 for LBA)
             self.drive_select_port
-                .write(0xE0 | ((lba >> 24) & 0x0F) as u8);
+                .write(drive_select | ((lba >> 24) & 0x0F) as u8);
 
             self.sector_count_port.write(sectors);
             self.lba_low_port.write(lba as u8);
@@ -70,28 +78,27 @@ impl AtaDrive {
             self.command_port.write(CMD_READ_SECTORS);
         }
 
+        // Read loop...
         for i in 0..sectors {
             self.poll_status()?;
-
             for j in 0..256 {
                 let data = unsafe { self.data_port.read() };
                 target[(i as usize * 256) + j] = data;
             }
         }
-
         Ok(())
     }
 
     pub fn write(&mut self, lba: u32, sectors: u8, data: &[u16]) -> Result<(), &'static str> {
-        if data.len() != (sectors as usize * 256) {
-            return Err("Data length does not match sector count");
-        }
-
+        // ... length check ...
         self.wait_busy();
+
+        let drive_select = if self.is_master { 0xE0 } else { 0xF0 };
 
         unsafe {
             self.drive_select_port
-                .write(0xE0 | ((lba >> 24) & 0x0F) as u8);
+                .write(drive_select | ((lba >> 24) & 0x0F) as u8);
+            // ... set other ports ...
             self.sector_count_port.write(sectors);
             self.lba_low_port.write(lba as u8);
             self.lba_mid_port.write((lba >> 8) as u8);
@@ -99,16 +106,15 @@ impl AtaDrive {
             self.command_port.write(CMD_WRITE_SECTORS);
         }
 
+        // ... write loop ...
         for i in 0..sectors {
             self.poll_status()?;
-
             for j in 0..256 {
                 unsafe {
                     self.data_port.write(data[(i as usize * 256) + j]);
                 }
             }
         }
-
         Ok(())
     }
 

@@ -36,7 +36,7 @@ fn main() {
     cmd.arg("-device")
         .arg("isa-debug-exit,iobase=0xf4,iosize=0x04");
     cmd.arg("-drive").arg(format!(
-        "file={},format=raw,if=ide,index=2,media=disk",
+        "file={},format=raw,if=ide,index=1,media=disk",
         user_disk
     ));
 
@@ -71,4 +71,3 @@ fn main() {
         _ => 2,    // unknown fault
     };
 }
-
