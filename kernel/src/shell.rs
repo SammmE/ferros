@@ -1,6 +1,9 @@
 use crate::framebuffer::WRITER;
+use crate::fs;
+use crate::fs::FILESYSTEM;
 use crate::task::keyboard::ScancodeStream;
 use crate::{print, println};
+
 use alloc::{
     string::{String, ToString},
     vec::Vec,
@@ -9,7 +12,7 @@ use futures_util::stream::StreamExt;
 use pc_keyboard::{DecodedKey, HandleControl, KeyCode, Keyboard, ScancodeSet1, layouts};
 
 pub async fn runshell() {
-    let PROMPT: &str = "ferros> ";
+    let prompt = "ferros> ";
 
     let mut scancode_stream = ScancodeStream::new();
     let mut keyboard = Keyboard::new(
@@ -19,7 +22,7 @@ pub async fn runshell() {
     );
 
     loop {
-        print!("{}", PROMPT);
+        print!("{}", prompt);
 
         let mut input_buffer: String = String::new();
 
@@ -27,30 +30,26 @@ pub async fn runshell() {
             if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
                 if let Some(key) = keyboard.process_keyevent(key_event) {
                     match key {
-                        DecodedKey::Unicode(character) => {
-                            match character {
-                                '\n' => {
-                                    println!();
-                                    break;
-                                }
-                                '\x08' => {
-                                    // Handle backspace
-                                    if !input_buffer.is_empty() {
-                                        input_buffer.pop();
-                                        print!("\x08 \x08"); // Move back, print space, move back again
-                                    }
-                                }
-                                _ => {
-                                    input_buffer.push(character);
-                                    print!("{}", character);
+                        DecodedKey::Unicode(character) => match character {
+                            '\n' => {
+                                println!();
+                                break;
+                            }
+                            '\x08' => {
+                                if !input_buffer.is_empty() {
+                                    input_buffer.pop();
+                                    print!("\x08 \x08");
                                 }
                             }
-                        }
+                            _ => {
+                                input_buffer.push(character);
+                                print!("{}", character);
+                            }
+                        },
                         DecodedKey::RawKey(KeyCode::Backspace) => {
-                            // Handle backspace
                             if !input_buffer.is_empty() {
                                 input_buffer.pop();
-                                print!("\x08 \x08"); // Move back, print space, move back again
+                                print!("\x08 \x08");
                             }
                         }
                         DecodedKey::RawKey(_) => {}
@@ -79,6 +78,7 @@ fn execute_command(command: &str, args: &[&str]) -> Vec<String> {
             output.push("  help - Show this help message".to_string());
             output.push("  echo [text] - Echo the provided text".to_string());
             output.push("  clear - Clear the screen".to_string());
+            output.push("  read_disk [lba] - Read a sector from disk".to_string());
             output.push("  reboot - Reboot the system".to_string());
         }
         "echo" => {
@@ -91,11 +91,90 @@ fn execute_command(command: &str, args: &[&str]) -> Vec<String> {
             }
         }
         "reboot" => {
-            // Since we don't have ACPI shutdown yet, we'll force a QEMU exit
-            // via our panic handler logic or just direct exit if exposed.
-            // For now, let's just panic to trigger the shutdown hook.
             panic!("Reboot command issued!");
         }
+        "read_disk" => {
+            // Usage: read_disk <lba>
+            // args[0] is the first argument
+            if args.len() < 1 {
+                println!("Usage: read_disk <lba>");
+                return output;
+            }
+
+            // Parse the sector number
+            if let Ok(lba) = args[0].parse::<u32>() {
+                println!("Reading sector {}...", lba);
+
+                match fs::read_sector(lba) {
+                    Ok(data) => {
+                        println!("-- Hex Dump (First 64 bytes) --");
+                        for i in 0..64 {
+                            print!("{:02X} ", data[i]);
+                            if (i + 1) % 16 == 0 {
+                                println!();
+                            }
+                        }
+
+                        println!("\n-- ASCII Preview --");
+                        for i in 0..64 {
+                            let c = data[i] as char;
+                            if c.is_ascii_graphic() {
+                                print!("{}", c);
+                            } else {
+                                print!(".");
+                            }
+                        }
+                        println!();
+                    }
+                    Err(e) => println!("Error reading disk: {}", e),
+                }
+            } else {
+                println!("Invalid sector number");
+            }
+        }
+
+        "cat" => {
+            // Usage: cat <filename>
+            if args.len() < 1 {
+                println!("Usage: cat <filename>");
+                return output;
+            }
+
+            let filename = args[0];
+
+            // Lock the filesystem
+            let mut fs_lock = FILESYSTEM.lock();
+
+            if let Some(fs) = fs_lock.as_mut() {
+                // Try to read the file
+                match fs.read_file(filename) {
+                    Some(data) => {
+                        // Convert bytes to string (lossy ensures it doesn't crash on binary data)
+                        let content = String::from_utf8_lossy(&data);
+                        println!("{}", content);
+                    }
+                    None => {
+                        println!("File not found: {}", filename);
+                    }
+                }
+            } else {
+                println!("Filesystem not initialized!");
+            }
+        }
+
+        "ls" => {
+            let mut fs_lock = FILESYSTEM.lock();
+            if let Some(fs) = fs_lock.as_mut() {
+                println!("Directory listing:");
+                let files = fs.list_root();
+                for file in files {
+                    println!("  {}", file);
+                }
+            } else {
+                println!("Filesystem not initialized!");
+            }
+        }
+
         _ => {
             println!("Unknown command: {}", command);
         }

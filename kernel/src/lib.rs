@@ -4,7 +4,9 @@
 extern crate alloc;
 
 pub mod allocator;
+pub mod drivers;
 pub mod framebuffer;
+pub mod fs;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
@@ -15,7 +17,10 @@ pub mod task;
 
 pub fn init_all() {
     gdt::init();
+    println!("[INIT] GDT initialized.");
+
     interrupts::init_idt();
+    println!("[INIT] IDT initialized.");
 
     unsafe {
         let mut pics = interrupts::PICS.lock();
@@ -29,12 +34,17 @@ pub fn init_all() {
         pics.write_masks(0xFC, 0xFF);
         // ---------------------
     }
+    println!("[INIT] PICs initialized.");
 
     interrupts::init_pit();
     x86_64::instructions::interrupts::enable();
+    println!("[INIT] PIT initialized and interrupts enabled.");
 
     // Keep the int3 here for now to be safe!
     x86_64::instructions::interrupts::int3();
+
+    fs::init_fs();
+    println!("[INIT] Filesystem initialized.");
 
     serial_println!("All systems initialized.");
 }

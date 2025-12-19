@@ -11,6 +11,8 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let prog = &args[0];
 
+    let user_disk = "user_disk.img";
+
     // choose whether to start the UEFI or BIOS image
     let uefi = match args.get(1).map(|s| s.to_lowercase()) {
         Some(ref s) if s == "uefi" => true,
@@ -33,6 +35,10 @@ fn main() {
     // enable the guest to exit qemu
     cmd.arg("-device")
         .arg("isa-debug-exit,iobase=0xf4,iosize=0x04");
+    cmd.arg("-drive").arg(format!(
+        "file={},format=raw,if=ide,index=2,media=disk",
+        user_disk
+    ));
 
     if uefi {
         let prebuilt =
@@ -60,8 +66,9 @@ fn main() {
     let mut child = cmd.spawn().expect("failed to start qemu-system-x86_64");
     let status = child.wait().expect("failed to wait on qemu");
     match status.code().unwrap_or(1) {
-        0x10 => 0,  // success
-        0x11 => 1,  // failure
-        _    => 2,  // unknown fault
+        0x10 => 0, // success
+        0x11 => 1, // failure
+        _ => 2,    // unknown fault
     };
 }
+
