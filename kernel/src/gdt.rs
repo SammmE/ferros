@@ -41,10 +41,10 @@ lazy_static! {
     };
 }
 
-struct Selectors {
-    code_selector: SegmentSelector,
-    data_selector: SegmentSelector,
-    tss_selector: SegmentSelector,
+pub struct Selectors {
+    pub code_selector: SegmentSelector,
+    pub data_selector: SegmentSelector,
+    pub tss_selector: SegmentSelector,
     pub user_code_selector: SegmentSelector,
     pub user_data_selector: SegmentSelector,
 }
@@ -57,16 +57,22 @@ pub fn init() {
 
     unsafe {
         CS::set_reg(GDT.1.code_selector);
-
         SS::set_reg(GDT.1.data_selector);
-
         DS::set_reg(SegmentSelector(0));
         ES::set_reg(SegmentSelector(0));
         FS::set_reg(SegmentSelector(0));
         GS::set_reg(SegmentSelector(0));
-
         load_tss(GDT.1.tss_selector);
     }
+}
+
+// Helpers for Syscalls
+pub fn get_kernel_code_selector() -> SegmentSelector {
+    GDT.1.code_selector
+}
+
+pub fn get_kernel_data_selector() -> SegmentSelector {
+    GDT.1.data_selector
 }
 
 pub fn get_user_selectors() -> (SegmentSelector, SegmentSelector) {

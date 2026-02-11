@@ -1,4 +1,4 @@
 /target
 
-old_user_disk_*.bin
-new_user_disk_*.bin
+*.img
+disk_modified/

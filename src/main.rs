@@ -1,74 +1,45 @@
 use ovmf_prebuilt::{Arch, FileType, Prebuilt, Source};
 use std::env;
+use std::fs;
+use std::path::Path;
 use std::process::{Command, exit};
 
+const DISK_SIZE_MB: usize = 64;
+const INPUT_DIR: &str = "disk";
+const IMAGE_FILE: &str = "user_disk.img";
+const OUTPUT_DIR: &str = "disk_modified";
+
 fn main() {
-    // read env variables that were set in build script
     let uefi_path = env!("UEFI_PATH");
     let bios_path = env!("BIOS_PATH");
 
-    // parse mode from CLI
     let args: Vec<String> = env::args().collect();
-    let prog = &args[0];
-
-    let user_disk = "user_disk.img";
-
-    // check that user disk exists
-    if !std::path::Path::new(user_disk).exists() {
-        eprintln!(
-            "User disk image '{}' not found. Please create it before running the VM.",
-            user_disk
-        );
-        exit(1);
-    }
-
-    // copy user disk to old_user_disk.img. If it already exists, do old_user_disk_[1-inf].img
-    let mut backup_index = 0;
-    let backup_disk = loop {
-        let backup_name = if backup_index == 0 {
-            "old_user_disk.img".to_string()
-        } else {
-            format!("old_user_disk_{}.img", backup_index)
-        };
-        if !std::path::Path::new(&backup_name).exists() {
-            break backup_name;
-        }
-        backup_index += 1;
-    };
-    std::fs::copy(user_disk, &backup_disk).expect("failed to backup user disk image");
-    println!("Backed up '{}' to '{}'", user_disk, backup_disk);
-
-    // choose whether to start the UEFI or BIOS image
-    let uefi = match args.get(1).map(|s| s.to_lowercase()) {
-        Some(ref s) if s == "uefi" => true,
-        Some(ref s) if s == "bios" => false,
-        Some(ref s) if s == "-h" || s == "--help" => {
-            println!("Usage: {prog} [uefi|bios]");
-            println!("  uefi  - boot using OVMF (UEFI)");
-            println!("  bios  - boot using legacy BIOS");
-            exit(0);
-        }
+    let uefi = match args.get(1).map(|s| s.as_str()) {
+        Some("uefi") => true,
+        Some("bios") => false,
         _ => {
-            eprintln!("Usage: {prog} [uefi|bios]");
+            println!("Usage: cargo run -- [uefi|bios]");
             exit(1);
         }
     };
 
+    // Prepare the Disk Image
+    prepare_disk_image();
+
     let mut cmd = Command::new("qemu-system-x86_64");
-    // print serial output to the shell
     cmd.arg("-serial").arg("mon:stdio");
-    // enable the guest to exit qemu
     cmd.arg("-device")
         .arg("isa-debug-exit,iobase=0xf4,iosize=0x04");
+
+    // Attach generated disk image
     cmd.arg("-drive").arg(format!(
         "file={},format=raw,if=ide,index=1,media=disk",
-        user_disk
+        IMAGE_FILE
     ));
 
     if uefi {
         let prebuilt =
             Prebuilt::fetch(Source::LATEST, "target/ovmf").expect("failed to update prebuilt");
-
         let code = prebuilt.get_file(Arch::X64, FileType::Code);
         let vars = prebuilt.get_file(Arch::X64, FileType::Vars);
 
@@ -78,7 +49,6 @@ fn main() {
             "if=pflash,format=raw,unit=0,file={},readonly=on",
             code.display()
         ));
-        // copy vars and enable rw instead of snapshot if you want to store data (e.g. enroll secure boot keys)
         cmd.arg("-drive").arg(format!(
             "if=pflash,format=raw,unit=1,file={},snapshot=on",
             vars.display()
@@ -88,28 +58,91 @@ fn main() {
             .arg(format!("format=raw,file={bios_path}"));
     }
 
-    // restore the old user disk, and store the current one in user_disk_new[0-inf].img
-    let mut new_index = 0;
-    let new_disk = loop {
-        let new_name = if new_index == 0 {
-            "user_disk_new.img".to_string()
-        } else {
-            format!("new_user_disk{}.img", new_index)
-        };
-        if !std::path::Path::new(&new_name).exists() {
-            break new_name;
-        }
-        new_index += 1;
-    };
-    std::fs::rename(user_disk, &new_disk).expect("failed to store new user disk image");
-    std::fs::copy(&backup_disk, user_disk).expect("failed to restore old user disk image");
-    println!("Stored new user disk image as '{}'", new_disk);
+    let mut child = cmd.spawn().expect("failed to start qemu");
+    let _ = child.wait(); // Wait for QEMU to close
 
-    let mut child = cmd.spawn().expect("failed to start qemu-system-x86_64");
-    let status = child.wait().expect("failed to wait on qemu");
-    match status.code().unwrap_or(1) {
-        0x10 => 0, // success
-        0x11 => 1, // failure
-        _ => 2,    // unknown fault
-    };
+    // This pulls everything out of user_disk.img into 'disk_modified/'
+    extract_disk_image();
+}
+
+fn prepare_disk_image() {
+    let disk_path = Path::new(INPUT_DIR);
+    if !disk_path.exists() {
+        fs::create_dir(disk_path).expect("failed to create input 'disk' directory");
+        fs::write(disk_path.join("README.txt"), "Put files in this folder!").unwrap();
+    }
+
+    println!("Creating {}MB FAT32 disk image...", DISK_SIZE_MB);
+
+    let file = fs::File::create(IMAGE_FILE).expect("failed to create img file");
+    file.set_len((DISK_SIZE_MB * 1024 * 1024) as u64)
+        .expect("failed to set file length");
+
+    let status = Command::new("mkfs.fat")
+        .arg("-F")
+        .arg("32")
+        .arg(IMAGE_FILE)
+        .output()
+        .expect("Failed to run mkfs.fat. Is 'dosfstools' installed?");
+
+    if !status.status.success() {
+        panic!(
+            "mkfs.fat failed: {}",
+            String::from_utf8_lossy(&status.stderr)
+        );
+    }
+
+    println!("Copying files from '{}' to disk image...", INPUT_DIR);
+
+    // pass each file individually because Rust doesn't expand "disk/*"
+    let mut mcopy_cmd = Command::new("mcopy");
+    mcopy_cmd.arg("-i").arg(IMAGE_FILE).arg("-s");
+
+    let mut has_files = false;
+    for entry in fs::read_dir(INPUT_DIR).expect("failed to read input dir") {
+        let entry = entry.expect("failed to read directory entry");
+        mcopy_cmd.arg(entry.path());
+        has_files = true;
+    }
+
+    if has_files {
+        // Destination is root of image
+        mcopy_cmd.arg("::/");
+
+        let status = mcopy_cmd.status().expect("Failed to run mcopy");
+        if !status.success() {
+            eprintln!("Warning: mcopy exited with error");
+        }
+    } else {
+        println!("No files found in '{}', skipping copy.", INPUT_DIR);
+    }
+}
+
+fn extract_disk_image() {
+    println!("Extracting disk state to '{}'...", OUTPUT_DIR);
+    let output_path = Path::new(OUTPUT_DIR);
+
+    if output_path.exists() {
+        fs::remove_dir_all(output_path).expect("failed to clear old output dir");
+    }
+    fs::create_dir(output_path).expect("failed to create output dir");
+
+    // mcopy -i image.img -s -n ::/ disk_modified/
+    // -n = no overwrite (doesn't matter since dir is empty)
+    // -s = recursive
+    let status = Command::new("mcopy")
+        .arg("-i")
+        .arg(IMAGE_FILE)
+        .arg("-s")
+        .arg("-n")
+        .arg("::/") // Source (Root of image)
+        .arg(OUTPUT_DIR) // Dest (Host folder)
+        .status()
+        .expect("Failed to run mcopy. Is 'mtools' installed?");
+
+    if status.success() {
+        println!("Disk snapshot saved to: {}", OUTPUT_DIR);
+    } else {
+        eprintln!("Warning: Failed to extract disk image.");
+    }
 }

@@ -3,11 +3,15 @@
 
 syscall_dispatcher:
     swapgs
-    mov [gs:8], rsp
-    mov rsp, [gs:0]
+    // Save User Stack Pointer to GS offset 8
+    mov qword ptr gs:[8], rsp
+    
+    // Load Kernel Stack Pointer from GS offset 0
+    mov rsp, qword ptr gs:[0]
 
-    push r11
-    push rcx
+    // Save registers
+    push r11  // RFLAGS
+    push rcx  // RIP
     push rbp
     push rbx
     push r12
@@ -15,9 +19,12 @@ syscall_dispatcher:
     push r14
     push r15
 
+    // Handle arguments (R10 -> RCX)
     mov rcx, r10
+    
     call syscall_rust_handler
 
+    // Restore registers
     pop r15
     pop r14
     pop r13
@@ -27,6 +34,8 @@ syscall_dispatcher:
     pop rcx
     pop r11
 
-    mov rsp, [gs:8]
+    // Restore User Stack Pointer
+    mov rsp, qword ptr gs:[8]
+    
     swapgs
     sysretq

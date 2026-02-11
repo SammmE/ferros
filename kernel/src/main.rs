@@ -35,43 +35,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
-    // USERSPACE TEST
-
-    let user_code_page = Page::containing_address(VirtAddr::new(0x1000_0000));
-    let user_stack_page = Page::containing_address(VirtAddr::new(0x2000_0000));
-    let flags =
-        PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;
-
-    unsafe {
-        mapper
-            .map_to(user_code_page, code_frame, flags, &mut frame_allocator)
-            .unwrap()
-            .flush();
-        mapper
-            .map_to(user_stack_page, stack_frame, flags, &mut frame_allocator)
-            .unwrap()
-            .flush();
-    }
-
-    let shellcode: [u8; 11] = [
-        0x48, 0xC7, 0xC7, 0x34, 0x12, 0x00, 0x00, 0x0F, 0x05, 0xEB, 0xFE,
-    ];
-
-    unsafe {
-        let dest = user_code_page.start_address().as_mut_ptr::<u8>();
-        core::ptr::copy_nonoverlapping(shellcode.as_ptr(), dest, shellcode.len());
-    }
-
-    println!("Jumping to Userspace...");
-    serial_println!("Jumping to Userspace...");
-
-    unsafe {
-        kernel::syscall::enter_userspace(
-            user_code_page.start_address().as_u64(),
-            user_stack_page.start_address().as_u64() + 4096u64,
-        );
-    }
-
+    // Initialize Framebuffer
     if let Some(framebuffer) = boot_info.framebuffer.as_mut() {
         let info = framebuffer.info();
         let buffer = framebuffer.buffer_mut();
@@ -81,17 +45,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     println!("Hello World from the Framebuffer!");
 
-    if let Some(writer) = WRITER.lock().as_mut() {
-        writer.set_color(0, 255, 0); // Green
-    }
-    println!("This should be green");
-
-    if let Some(writer) = WRITER.lock().as_mut() {
-        writer.set_color(255, 255, 255); // Reset to white
-    }
-
+    // --- RUN SHELL FIRST ---
     let executor = Executor::new();
     executor.spawn(Task::new(shell::runshell()));
 
+    // Note: The executor.run() below will loop forever.
     executor.run();
 }
