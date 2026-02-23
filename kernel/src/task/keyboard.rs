@@ -17,16 +17,10 @@ static WAKER: AtomicWaker = AtomicWaker::new();
 pub(crate) fn add_scancode(scancode: u8) {
     if let Ok(queue) = SCANCODE_QUEUE.try_get() {
         if queue.push(scancode).is_err() {
-            // Queue is full; drop the scancode (or log a warning)
-            // In a real OS, you might signal a buffer overflow
-            // println!("WARNING: Scancode queue full");
+            // Queue is full; scancode is dropped
         } else {
-            // Wake up the task waiting on this queue
             WAKER.wake();
         }
-    } else {
-        // Queue hasn't been initialized yet
-        // println!("WARNING: Scancode queue uninitialized");
     }
 }
 

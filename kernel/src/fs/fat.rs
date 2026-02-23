@@ -178,7 +178,6 @@ impl Fat32Driver {
         let mut buf = [0u8; 512];
 
         for i in 0..self.sectors_per_cluster {
-            // FIX: Removed `* 512` and used helper
             self.read_sector_into_u8(start_lba + i, &mut buf);
             data.extend_from_slice(&buf);
         }

@@ -50,6 +50,10 @@ pub fn init_all(boot_info: &'static mut BootInfo) {
     .expect("heap initialization failed");
     serial_println!("[INIT] Memory & Heap initialized.");
 
+    // Unmap null page to catch null pointer dereferences
+    memory::unmap_null_page().expect("Failed to unmap null page");
+    serial_println!("[INIT] Null page unmapped for safety.");
+
     x86_64::instructions::interrupts::enable();
     serial_println!("[INIT] Interrupts enabled.");
 

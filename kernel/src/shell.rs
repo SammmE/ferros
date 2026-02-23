@@ -74,14 +74,12 @@ fn execute_command(command: &str, args: &[&str]) -> Vec<String> {
 
     match command {
         "help" => {
-            // basic commands
             output.push("BASIC COMMANDS:".to_string());
             output.push("  help - Show this help message".to_string());
             output.push("  echo [text] - Echo the provided text".to_string());
             output.push("  clear - Clear the screen".to_string());
             output.push("  exit - shutdown the system".to_string());
 
-            // filesystem commands
             output.push("FILESYSTEM COMMANDS:".to_string());
             output.push("  read_disk [lba] - Read a sector from disk".to_string());
             output.push("  ls - List files in the root directory".to_string());
@@ -105,8 +103,6 @@ fn execute_command(command: &str, args: &[&str]) -> Vec<String> {
             panic!("exit command issued!");
         }
         "read_disk" => {
-            // Usage: read_disk <lba>
-            // args[0] is the first argument
             if args.len() < 1 {
                 println!("Usage: read_disk <lba>");
                 return output;
@@ -145,7 +141,6 @@ fn execute_command(command: &str, args: &[&str]) -> Vec<String> {
         }
 
         "cat" => {
-            // Usage: cat <filename>
             if args.len() < 1 {
                 println!("Usage: cat <filename>");
                 return output;
@@ -187,7 +182,6 @@ fn execute_command(command: &str, args: &[&str]) -> Vec<String> {
         }
 
         "write" => {
-            // Usage: write <filename> <content...>
             if args.len() < 2 {
                 println!("Usage: write <filename> <content>");
                 return output;

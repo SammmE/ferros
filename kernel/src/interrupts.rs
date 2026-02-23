@@ -80,7 +80,6 @@ pub fn init_pit() {
     }
 }
 
-// INTERRUPT HANDLERS
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
     serial_println!("EXCEPTION: BREAKPOINT\n{:#?}", stack_frame);
 }
@@ -89,12 +88,32 @@ extern "x86-interrupt" fn page_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: PageFaultErrorCode,
 ) {
+    use x86_64::registers::segmentation::{Segment, CS};
+
     serial_println!("EXCEPTION: PAGE FAULT");
     serial_println!("Accessed Address: {:?}", Cr2::read());
     serial_println!("Error Code: {:?}", error_code);
     serial_println!("{:#?}", stack_frame);
 
-    panic!("Page fault");
+    // Check if the fault occurred in user mode (Ring 3)
+    // The CS register's bottom 2 bits contain the Current Privilege Level (CPL)
+    let cs = CS::get_reg();
+    let privilege_level = cs.0 & 0x3;
+
+    if privilege_level == 3 {
+        // User mode fault - kill the process instead of panicking
+        serial_println!("User process caused a page fault. Terminating process.");
+        crate::println!("\nSegmentation Fault: Process terminated due to invalid memory access");
+
+        // LIMITATION: No process management yet. In a full OS, this would terminate
+        // the process and return control to the scheduler/shell. For now, we halt.
+        loop {
+            x86_64::instructions::hlt();
+        }
+    } else {
+        // Kernel mode fault - this is a kernel bug, panic
+        panic!("Kernel page fault - this is a bug in the OS!");
+    }
 }
 
 extern "x86-interrupt" fn double_fault_handler(
@@ -104,7 +123,6 @@ extern "x86-interrupt" fn double_fault_handler(
     panic!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
 }
 
-// PICs
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     unsafe {
         PICS.lock()
@@ -116,7 +134,6 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
     let mut port = Port::new(0x60);
     let scancode: u8 = unsafe { port.read() };
 
-    // Send the raw scancode to the queue
     crate::task::keyboard::add_scancode(scancode);
 
     unsafe {

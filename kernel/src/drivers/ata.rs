@@ -10,7 +10,6 @@ const CMD_IDENTIFY: u8 = 0xEC;
 
 // Status Register Bits
 const STATUS_BSY: u8 = 0x80; // Busy
-const _STATUS_DRDY: u8 = 0x40; // Drive Ready (Unused)
 const STATUS_DRQ: u8 = 0x08; // Data Request
 const STATUS_ERR: u8 = 0x01; // Error
 
@@ -48,7 +47,7 @@ impl AtaDrive {
             drive_select_port: Port::new(base + 6),
             command_port: PortWriteOnly::new(base + 7),
             status_port: PortReadOnly::new(base + 7),
-            is_master, // <--- Store it
+            is_master,
         }
     }
 
@@ -78,7 +77,6 @@ impl AtaDrive {
             self.command_port.write(CMD_READ_SECTORS);
         }
 
-        // Read loop...
         for i in 0..sectors {
             self.poll_status()?;
             for j in 0..256 {
@@ -90,7 +88,6 @@ impl AtaDrive {
     }
 
     pub fn write(&mut self, lba: u32, sectors: u8, data: &[u16]) -> Result<(), &'static str> {
-        // ... length check ...
         self.wait_busy();
 
         let drive_select = if self.is_master { 0xE0 } else { 0xF0 };
@@ -98,7 +95,6 @@ impl AtaDrive {
         unsafe {
             self.drive_select_port
                 .write(drive_select | ((lba >> 24) & 0x0F) as u8);
-            // ... set other ports ...
             self.sector_count_port.write(sectors);
             self.lba_low_port.write(lba as u8);
             self.lba_mid_port.write((lba >> 8) as u8);
@@ -106,7 +102,6 @@ impl AtaDrive {
             self.command_port.write(CMD_WRITE_SECTORS);
         }
 
-        // ... write loop ...
         for i in 0..sectors {
             self.poll_status()?;
             for j in 0..256 {

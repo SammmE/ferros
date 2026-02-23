@@ -1,8 +1,8 @@
 use core::arch::global_asm;
-use x86_64::VirtAddr;
 use x86_64::registers::model_specific::{Efer, EferFlags, KernelGsBase, LStar, SFMask, Star};
 use x86_64::registers::rflags::RFlags;
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
+use x86_64::VirtAddr;
 
 use crate::gdt;
 
@@ -99,15 +99,41 @@ extern "C" fn syscall_rust_handler(
 }
 
 fn syscall_print(msg_ptr: usize, len: usize) -> usize {
-    if msg_ptr == 0 || msg_ptr > 0x800000000000 {
+    // Safeguard 1: Check for null pointer
+    if msg_ptr == 0 {
+        crate::serial_println!("syscall_print: NULL pointer rejected");
         return 1;
     }
 
+    // Safeguard 2: Limit length to prevent excessive printing (4MB max)
+    const MAX_PRINT_LENGTH: usize = 4 * 1024 * 1024;
+    if len > MAX_PRINT_LENGTH {
+        crate::serial_println!(
+            "syscall_print: Length {} exceeds max {}",
+            len,
+            MAX_PRINT_LENGTH
+        );
+        return 1;
+    }
+
+    // Safeguard 3: Validate the entire buffer is user-readable
+    let addr = VirtAddr::new(msg_ptr as u64);
+    if !crate::memory::is_user_readable(addr, len) {
+        crate::serial_println!(
+            "syscall_print: Buffer at {:#x} (len={}) is not user-readable",
+            msg_ptr,
+            len
+        );
+        return 1;
+    }
+
+    // Now it's safe to access the buffer
     let msg_slice = unsafe { core::slice::from_raw_parts(msg_ptr as *const u8, len) };
     if let Ok(msg) = core::str::from_utf8(msg_slice) {
         crate::println!("{}", msg);
         0
     } else {
+        crate::serial_println!("syscall_print: Invalid UTF-8");
         1
     }
 }
@@ -132,21 +158,16 @@ pub fn test_userspace_syscall() {
         }
     };
 
-    // 1. mov rdi, string_addr (Arg 1)
     emit(&[0x48, 0xBF], &mut writer);
     emit(&string_addr.to_le_bytes(), &mut writer);
 
-    // 2. mov rsi, msg_len (Arg 2)
     emit(&[0x48, 0xBE], &mut writer);
     emit(&(msg.len() as u64).to_le_bytes(), &mut writer);
 
-    // 3. mov rax, 1 (Syscall ID)
     emit(&[0x48, 0xC7, 0xc0, 0x01, 0x00, 0x00, 0x00], &mut writer);
 
-    // 4. syscall
     emit(&[0x0F, 0x05], &mut writer);
 
-    // 5. jmp $
     emit(&[0xEB, 0xFE], &mut writer);
 
     while writer < code_size {
