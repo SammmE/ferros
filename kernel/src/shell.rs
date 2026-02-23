@@ -88,6 +88,9 @@ fn execute_command(command: &str, args: &[&str]) -> Vec<String> {
             output.push("  cat [filename] - Display contents of a file".to_string());
             output.push("  write [filename] [content] - Create or overwrite a file".to_string());
             output.push("  disk_info - Show information about the disk".to_string());
+
+            output.push("SYSTEM COMMANDS:".to_string());
+            output.push("  test_userspace - Test syscall from userspace".to_string());
         }
         "echo" => {
             let echoed = args.join(" ");
@@ -208,7 +211,6 @@ fn execute_command(command: &str, args: &[&str]) -> Vec<String> {
         "disk_info" => {
             let mut fs_lock = FILESYSTEM.lock();
             if let Some(fs) = fs_lock.as_mut() {
-                // Access the underlying ATA drive from the FAT driver
                 match fs.drive.get_total_sectors() {
                     Ok(sectors) => {
                         let size_mb = (sectors * 512) / 1024 / 1024;
@@ -221,6 +223,10 @@ fn execute_command(command: &str, args: &[&str]) -> Vec<String> {
             } else {
                 println!("Filesystem/Drive not initialized!");
             }
+        }
+
+        "test_userspace" => {
+            crate::syscall::test_userspace_syscall();
         }
 
         _ => {

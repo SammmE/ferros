@@ -2,7 +2,7 @@ use ovmf_prebuilt::{Arch, FileType, Prebuilt, Source};
 use std::env;
 use std::fs;
 use std::path::Path;
-use std::process::{Command, exit};
+use std::process::{exit, Command};
 
 const DISK_SIZE_MB: usize = 64;
 const INPUT_DIR: &str = "disk";
@@ -127,16 +127,13 @@ fn extract_disk_image() {
     }
     fs::create_dir(output_path).expect("failed to create output dir");
 
-    // mcopy -i image.img -s -n ::/ disk_modified/
-    // -n = no overwrite (doesn't matter since dir is empty)
-    // -s = recursive
     let status = Command::new("mcopy")
         .arg("-i")
         .arg(IMAGE_FILE)
         .arg("-s")
         .arg("-n")
-        .arg("::/") // Source (Root of image)
-        .arg(OUTPUT_DIR) // Dest (Host folder)
+        .arg("::/")
+        .arg(OUTPUT_DIR)
         .status()
         .expect("Failed to run mcopy. Is 'mtools' installed?");
 

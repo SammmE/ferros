@@ -3,8 +3,10 @@
 
 extern crate alloc;
 
+use bootloader_api::BootInfo;
+use x86_64::VirtAddr;
+
 pub mod allocator;
-pub mod demo;
 pub mod drivers;
 pub mod framebuffer;
 pub mod fs;
@@ -17,36 +19,53 @@ pub mod shell;
 pub mod syscall;
 pub mod task;
 
-pub fn init_all() {
+pub fn init_all(boot_info: &'static mut BootInfo) {
     gdt::init();
-    println!("[INIT] GDT initialized.");
+    serial_println!("[INIT] GDT initialized.");
 
     interrupts::init_idt();
-    println!("[INIT] IDT initialized.");
+    serial_println!("[INIT] IDT initialized.");
 
-    unsafe {
-        let mut pics = interrupts::PICS.lock();
-        pics.initialize();
-
-        // 0xFC = 1111 1100 (Binary)
-        // Zeros mean "Enabled". Ones mean "Disabled".
-        // Bit 0 (Timer) = 0
-        // Bit 1 (Keyboard) = 0
-        // All others = 1
-        pics.write_masks(0xFC, 0xFF);
-        // ---------------------
-    }
-    println!("[INIT] PICs initialized.");
+    interrupts::init_pics();
+    serial_println!("[INIT] PICs initialized.");
 
     interrupts::init_pit();
-    x86_64::instructions::interrupts::enable();
-    println!("[INIT] PIT initialized and interrupts enabled.");
+    serial_println!("[INIT] PIT initialized.");
 
-    // Keep the int3 here for now to be safe!
-    x86_64::instructions::interrupts::int3();
+    let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset.into_option().unwrap());
+    let mut mapper = unsafe { memory::init(phys_mem_offset) };
+
+    let frame_allocator =
+        unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_regions) };
+
+    {
+        let mut global_allocator = memory::FRAME_ALLOCATOR.lock();
+        *global_allocator = Some(frame_allocator);
+    }
+
+    allocator::init_heap(
+        &mut mapper,
+        memory::FRAME_ALLOCATOR.lock().as_mut().unwrap(),
+    )
+    .expect("heap initialization failed");
+    serial_println!("[INIT] Memory & Heap initialized.");
+
+    x86_64::instructions::interrupts::enable();
+    serial_println!("[INIT] Interrupts enabled.");
+
+    syscall::init_syscall();
+    serial_println!("[INIT] Syscalls initialized.");
 
     fs::init_fs();
-    println!("[INIT] Filesystem initialized.");
+    serial_println!("[INIT] Filesystem initialized.");
+
+    if let Some(framebuffer) = boot_info.framebuffer.as_mut() {
+        let info = framebuffer.info();
+        let buffer = framebuffer.buffer_mut();
+        let mut writer = framebuffer::WRITER.lock();
+        *writer = Some(framebuffer::FrameBufferWriter::new(buffer, info));
+    }
+    serial_println!("[INIT] Framebuffer initialized.");
 
     serial_println!("All systems initialized.");
 }

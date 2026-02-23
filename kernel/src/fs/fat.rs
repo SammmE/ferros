@@ -3,7 +3,7 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-// stolen off OSDev
+// FAT32 implementation based on OSDev wiki
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 struct Bpb {
@@ -120,19 +120,11 @@ impl Fat32Driver {
         let mut raw_buffer = [0u16; 256];
         drive.read(0, 1, &mut raw_buffer).unwrap();
 
-        // Manual conversion for BPB parsing
         let mut buf = [0u8; 512];
         for (i, &word) in raw_buffer.iter().enumerate() {
             buf[i * 2] = (word & 0xFF) as u8;
             buf[i * 2 + 1] = ((word >> 8) & 0xFF) as u8;
         }
-
-        crate::serial_println!("DEBUG: Reading Sector 0...");
-        crate::serial_print!("Hex: ");
-        for i in 0..16 {
-            crate::serial_print!("{:02X} ", buf[i]);
-        }
-        crate::serial_println!();
 
         let bpb = unsafe { &*(buf.as_ptr() as *const Bpb) };
 
@@ -173,7 +165,11 @@ impl Fat32Driver {
         };
 
         let val = entry & 0x0FFF_FFFF;
-        if val >= 0x0FFF_FFF8 { None } else { Some(val) }
+        if val >= 0x0FFF_FFF8 {
+            None
+        } else {
+            Some(val)
+        }
     }
 
     fn read_cluster(&mut self, cluster: u32) -> Vec<u8> {

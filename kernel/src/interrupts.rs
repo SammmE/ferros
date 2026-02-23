@@ -56,6 +56,14 @@ pub fn init_idt() {
     IDT.load();
 }
 
+pub fn init_pics() {
+    unsafe {
+        let mut pics = PICS.lock();
+        pics.initialize();
+        pics.write_masks(0xFC, 0xFF); // Enable timer and keyboard IRQs only
+    }
+}
+
 pub fn init_pit() {
     let mut command_port = Port::new(0x43);
     let mut data_port = Port::new(0x40);
