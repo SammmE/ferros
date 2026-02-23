@@ -1,8 +1,8 @@
 use core::arch::global_asm;
+use x86_64::VirtAddr;
 use x86_64::registers::model_specific::{Efer, EferFlags, KernelGsBase, LStar, SFMask, Star};
 use x86_64::registers::rflags::RFlags;
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
-use x86_64::VirtAddr;
 
 use crate::gdt;
 

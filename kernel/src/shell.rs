@@ -1,6 +1,7 @@
 use crate::framebuffer::WRITER;
 use crate::fs;
 use crate::fs::FILESYSTEM;
+use crate::process::load_elf;
 use crate::task::keyboard::ScancodeStream;
 use crate::{print, println};
 
@@ -86,6 +87,7 @@ fn execute_command(command: &str, args: &[&str]) -> Vec<String> {
             output.push("  cat [filename] - Display contents of a file".to_string());
             output.push("  write [filename] [content] - Create or overwrite a file".to_string());
             output.push("  disk_info - Show information about the disk".to_string());
+            output.push("  readelf - testing command for loading ELF files".to_string());
 
             output.push("SYSTEM COMMANDS:".to_string());
             output.push("  test_userspace - Test syscall from userspace".to_string());
@@ -217,6 +219,14 @@ fn execute_command(command: &str, args: &[&str]) -> Vec<String> {
             } else {
                 println!("Filesystem/Drive not initialized!");
             }
+        }
+
+        "readelf" => {
+            if args.len() < 1 {
+                println!("Usage: readelf <filename>");
+                return output;
+            }
+            load_elf(args[0]);
         }
 
         "test_userspace" => {
