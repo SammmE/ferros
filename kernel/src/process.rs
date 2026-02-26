@@ -11,7 +11,7 @@ pub fn load_elf(filename: &str) {
         match fs.read_file(filename) {
             Some(bytes) => {
                 let file = xmas_elf::ElfFile::new(&bytes);
-                println!("{:#?}", file);
+                println!("{:?}", file);
             }
             None => {
                 println!("File not found: {}", filename);
