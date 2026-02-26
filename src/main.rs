@@ -87,6 +87,8 @@ fn prepare_user_programs() -> Result<(), Box<dyn Error>> {
                 .arg("--crate-type")
                 .arg("bin")
                 .arg(&path)
+                .arg("-C")
+                .arg("link-arg=--image-base=0x400000")
                 .arg("-o")
                 .arg(&output_path)
                 .status()?;

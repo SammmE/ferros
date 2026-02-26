@@ -221,7 +221,7 @@ fn execute_command(command: &str, args: &[&str]) -> Vec<String> {
             }
         }
 
-        "readelf" => {
+        "exec" => {
             if args.len() < 1 {
                 println!("Usage: readelf <filename>");
                 return output;
