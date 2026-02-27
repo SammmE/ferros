@@ -5,7 +5,6 @@ use crossbeam_queue::ArrayQueue;
 use lazy_static::lazy_static;
 use x86_64::instructions::interrupts::{self, enable_and_hlt};
 
-// Fixed size queue for waiting tasks.
 const MAX_TASKS: usize = 100;
 
 lazy_static! {
@@ -39,24 +38,16 @@ impl Executor {
             let mut context = Context::from_waker(&waker);
 
             match future_slot.as_mut().poll(&mut context) {
-                Poll::Ready(()) => {
-                    // Task done, let Arc drop it
-                }
-                Poll::Pending => {
-                    // Task is waiting for a waker, do nothing.
-                    // The waker is responsible for pushing it back to TASK_QUEUE
-                }
+                Poll::Ready(()) => {}
+                Poll::Pending => {}
             }
         }
     }
 
     fn sleep_if_idle(&self) {
-        // FAST PATH: Disable interrupts so nothing changes while we check
         interrupts::disable();
 
         if TASK_QUEUE.is_empty() {
-            // ATOMIC SLEEP: Enable interrupts and halt CPU in one instruction.
-            // This prevents the "lost wakeup" race condition.
             enable_and_hlt();
         } else {
             interrupts::enable();

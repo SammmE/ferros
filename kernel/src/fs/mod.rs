@@ -12,7 +12,6 @@ pub fn init_fs() {
 
     let driver = Fat32Driver::new(drive);
 
-    // Lock the global mutex and move the drive instance into it
     *FILESYSTEM.lock() = Some(driver);
 }
 

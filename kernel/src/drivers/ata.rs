@@ -1,17 +1,14 @@
 use x86_64::instructions::port::{Port, PortReadOnly, PortWriteOnly};
 
-/// Standard sector size for ATA drives (512 bytes)
 pub const SECTOR_SIZE: usize = 512;
 
-// Command Constants
 const CMD_READ_SECTORS: u8 = 0x20;
 const CMD_WRITE_SECTORS: u8 = 0x30;
 const CMD_IDENTIFY: u8 = 0xEC;
 
-// Status Register Bits
-const STATUS_BSY: u8 = 0x80; // Busy
-const STATUS_DRQ: u8 = 0x08; // Data Request
-const STATUS_ERR: u8 = 0x01; // Error
+const STATUS_BSY: u8 = 0x80;
+const STATUS_DRQ: u8 = 0x08;
+const STATUS_ERR: u8 = 0x01;
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u16)]
@@ -58,14 +55,9 @@ impl AtaDrive {
 
         self.wait_busy();
 
-        // Determine Selection Byte
-        // 0xE0 = Master, 0xF0 = Slave
         let drive_select = if self.is_master { 0xE0 } else { 0xF0 };
 
         unsafe {
-            //
-            // Bit 4 selects drive (0=Master, 1=Slave)
-            // Bits 5 and 7 are usually fixed to 1 (0xA0 or 0xE0 for LBA)
             self.drive_select_port
                 .write(drive_select | ((lba >> 24) & 0x0F) as u8);
 
@@ -137,8 +129,6 @@ impl AtaDrive {
         }
     }
 
-    /// Sends the IDENTIFY command to retrieve drive information.
-    /// Returns a 256-word (512 byte) buffer of raw data.
     pub fn identify(&mut self) -> Result<[u16; 256], &'static str> {
         self.wait_busy();
 
@@ -169,15 +159,10 @@ impl AtaDrive {
         Ok(buffer)
     }
 
-    /// Returns the total number of sectors on the drive (LBA28).
     pub fn get_total_sectors(&mut self) -> Result<u32, &'static str> {
         let data = self.identify()?;
-
-        // Words 60 and 61 contain the total user addressable sectors (LBA28)
-        // Word 60 = Lower 16 bits
-        // Word 61 = Upper 16 bits
+        // Words 60-61: total user-addressable sectors (LBA28)
         let sectors = (data[60] as u32) | ((data[61] as u32) << 16);
-
         Ok(sectors)
     }
 }

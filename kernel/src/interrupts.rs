@@ -6,8 +6,7 @@ use x86_64::instructions::port::Port;
 use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
-// Solve Overlapping issue (PIC offsets start 1-15 and CPU exceptions 0-31)
-pub const PIC_1_OFFSET: u8 = 32; // 32 and onwards are free now
+pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 
 pub static PICS: Mutex<ChainedPics> =
@@ -17,18 +16,15 @@ lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
 
-        // Set handlers for exceptions
         idt.breakpoint.set_handler_fn(breakpoint_handler);
         idt.page_fault.set_handler_fn(page_fault_handler);
 
-        // Double Fault needs special treatment with its own stack
         unsafe {
             idt.double_fault
                 .set_handler_fn(double_fault_handler)
                 .set_stack_index(crate::gdt::DOUBLE_FAULT_IST_INDEX);
         }
 
-        // Set handlers for hardware interrupts
         idt[InterruptIndex::Timer.as_u8()].set_handler_fn(timer_interrupt_handler);
         idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
 
@@ -60,7 +56,7 @@ pub fn init_pics() {
     unsafe {
         let mut pics = PICS.lock();
         pics.initialize();
-        pics.write_masks(0xFC, 0xFF); // Enable timer and keyboard IRQs only
+        pics.write_masks(0xFC, 0xFF);
     }
 }
 
@@ -68,13 +64,9 @@ pub fn init_pit() {
     let mut command_port = Port::new(0x43);
     let mut data_port = Port::new(0x40);
 
-    // 0x36 = 0011 0110
-    // Channel 0 | Access Lo/Hi byte | Mode 3 (Square Wave) | Binary
+    // Channel 0 | Lo/Hi byte | Mode 3 (Square Wave) | Binary
     unsafe {
         command_port.write(0x36 as u8);
-
-        // 1193182 / 65536 = 18.2 Hz (Standard rate)
-        // Send Low byte (0x00) then High byte (0x00) for divisor 65536
         data_port.write(0x00 as u8);
         data_port.write(0x00 as u8);
     }
@@ -95,22 +87,15 @@ extern "x86-interrupt" fn page_fault_handler(
     serial_println!("Error Code: {:?}", error_code);
     serial_println!("{:#?}", stack_frame);
 
-    // Check if the fault occurred in user mode (Ring 3)
-    // The CS register's bottom 2 bits contain the Current Privilege Level (CPL)
     let cs = CS::get_reg();
     let privilege_level = cs.0 & 0x3;
 
     if privilege_level == 3 {
-        // User mode fault - kill the process instead of panicking
         serial_println!("User process caused a page fault. Terminating process.");
-
-        // LIMITATION: No process management yet. In a full OS, this would terminate
-        // the process and return control to the scheduler/shell. For now, we halt.
         loop {
             x86_64::instructions::hlt();
         }
     } else {
-        // Kernel mode fault - this is a kernel bug, panic
         panic!("Kernel page fault - this is a bug in the OS!");
     }
 }

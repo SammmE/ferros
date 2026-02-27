@@ -3,8 +3,6 @@ use super::types::{Color, Size};
 use alloc::vec;
 use alloc::vec::Vec;
 
-/// A RAM-backed surface.
-/// Format is always RGBA (4 bytes per pixel).
 pub struct Bitmap {
     pub width: u32,
     pub height: u32,

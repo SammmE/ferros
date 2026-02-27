@@ -76,7 +76,6 @@ pub fn init() {
     }
 }
 
-// Helpers for Syscalls
 pub fn get_kernel_code_selector() -> SegmentSelector {
     GDT.1.code_selector
 }

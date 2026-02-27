@@ -15,7 +15,7 @@ pub fn load_elf(filename: &str) -> Result<(), String> {
         let mut fs_lock = FILESYSTEM.lock();
         let fs = fs_lock.as_mut().ok_or("Filesystem not initialized")?;
         fs.read_file(filename).ok_or("File not found")?
-    }; // <- fs_lock is DROPPED here. 
+    };
 
     let elf = ElfFile::new(&file_data).map_err(|e| "Elf parse error")?;
     xmas_elf::header::sanity_check(&elf).map_err(|e| "ELF sanity check failed")?;
@@ -37,11 +37,9 @@ pub fn load_elf(filename: &str) -> Result<(), String> {
                 continue;
             }
 
-            // Round start address DOWN to nearest 4096
             let start_addr = VirtAddr::new(virt_addr);
             let start_page: Page<Size4KiB> = Page::containing_address(start_addr);
 
-            // Round end address UP (virt_addr + mem_size)
             let end_addr = start_addr + mem_size;
             let end_page: Page<Size4KiB> = Page::containing_address(end_addr - 1u64);
 
@@ -50,7 +48,6 @@ pub fn load_elf(filename: &str) -> Result<(), String> {
                 | PageTableFlags::USER_ACCESSIBLE;
 
             for page in Page::range_inclusive(start_page, end_page) {
-                // If page is not mapped, map it
                 if memory::translate_addr(page.start_address()).is_none() {
                     let frame = frame_allocator.allocate_frame().ok_or("Out of memory")?;
 
@@ -69,7 +66,6 @@ pub fn load_elf(filename: &str) -> Result<(), String> {
                 core::ptr::copy_nonoverlapping(src_ptr, dest_ptr, file_size as usize);
             }
 
-            // If the memory segment is larger than the file data, the rest must be zero.
             if mem_size > file_size {
                 unsafe {
                     let zero_start = (virt_addr + file_size) as *mut u8;
@@ -81,7 +77,7 @@ pub fn load_elf(filename: &str) -> Result<(), String> {
     }
 
     let stack_start = VirtAddr::new(0x0000_7FFF_FFFF_0000);
-    let stack_size_pages = 16; // 64KiB stack
+    let stack_size_pages = 16;
     let stack_end_page = Page::containing_address(stack_start - 1u64);
     let stack_start_page = stack_end_page - (stack_size_pages - 1) as u64;
 

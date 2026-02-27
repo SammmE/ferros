@@ -16,16 +16,13 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    /// Sets the clipping area. Drawing outside this area is ignored.
     pub fn set_clip_rect(&mut self, rect: Rect) {
         let size = self.surface.size();
         let screen_rect = Rect::new(0, 0, size.width, size.height);
 
-        // Intersect requested clip with actual screen bounds for safety
         if let Some(valid_rect) = screen_rect.intersect(&rect) {
             self.clip_rect = valid_rect;
         } else {
-            // If no intersection, clip everything (empty rect)
             self.clip_rect = Rect::new(0, 0, 0, 0);
         }
     }
@@ -44,7 +41,6 @@ impl<'a> Renderer<'a> {
     }
 
     pub fn fill_rect(&mut self, rect: Rect, color: Color) {
-        // Calculate intersection with clip rect
         if let Some(draw_rect) = self.clip_rect.intersect(&rect) {
             for y in draw_rect.y..(draw_rect.y + draw_rect.height as i32) {
                 for x in draw_rect.x..(draw_rect.x + draw_rect.width as i32) {
@@ -84,22 +80,18 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    /// Copies a source surface onto the destination at `pos`
     pub fn blit(&mut self, source: &dyn Surface, pos: Point) {
         let src_size = source.size();
         let target_rect = Rect::new(pos.x, pos.y, src_size.width, src_size.height);
 
-        // Only iterate over the visible intersection
         if let Some(draw_rect) = self.clip_rect.intersect(&target_rect) {
             for y in draw_rect.y..(draw_rect.y + draw_rect.height as i32) {
                 for x in draw_rect.x..(draw_rect.x + draw_rect.width as i32) {
-                    // Calculate source coordinates (relative to source origin 0,0)
                     let src_x = (x - pos.x) as u32;
                     let src_y = (y - pos.y) as u32;
 
                     unsafe {
                         let color = source.get_pixel_unchecked(src_x, src_y);
-                        // Simple alpha blending check (0 = transparent)
                         if color.a > 0 {
                             self.surface.set_pixel_unchecked(x as u32, y as u32, color);
                         }

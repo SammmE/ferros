@@ -34,8 +34,6 @@ impl Rect {
         }
     }
 
-    /// Returns the intersection of two rectangles.
-    /// Useful for clipping (ensuring a window doesn't draw outside the screen).
     pub fn intersect(&self, other: &Rect) -> Option<Rect> {
         let x1 = core::cmp::max(self.x, other.x);
         let y1 = core::cmp::max(self.y, other.y);

@@ -3,7 +3,6 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-// FAT32 implementation based on OSDev wiki
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 struct Bpb {
@@ -103,13 +102,10 @@ pub struct Fat32Driver {
 }
 
 impl Fat32Driver {
-    /// Helper to bridge u16 ATA driver to u8 FAT driver
     fn read_sector_into_u8(&mut self, lba: u32, buffer: &mut [u8; 512]) {
         let mut raw_buffer = [0u16; 256];
-        // Read 1 sector, passing the u16 buffer
         self.drive.read(lba, 1, &mut raw_buffer).unwrap();
 
-        // Convert back to u8
         for (i, &word) in raw_buffer.iter().enumerate() {
             buffer[i * 2] = (word & 0xFF) as u8;
             buffer[i * 2 + 1] = ((word >> 8) & 0xFF) as u8;
@@ -310,13 +306,11 @@ impl Fat32Driver {
         let mut buf = [0u8; 512];
         self.read_sector_into_u8(fat_sector, &mut buf);
 
-        // Update the value in the buffer
         unsafe {
             let ptr = buf.as_mut_ptr().add(ent_offset) as *mut u32;
             *ptr = (*ptr & 0xF000_0000) | (value & 0x0FFF_FFFF);
         }
 
-        // Write it back
         self.write_sector_from_u8(fat_sector, &buf);
     }
 
@@ -345,14 +339,11 @@ impl Fat32Driver {
 
         let mut allocated_clusters = Vec::new();
 
-        // Find enough clusters
         for _ in 0..clusters_needed {
             if let Some(cluster) = self.find_free_cluster() {
                 allocated_clusters.push(cluster);
-                // Temporarily mark as EOF so find_free_cluster doesn't find it again immediately
                 self.set_fat_entry(cluster, 0x0FFF_FFFF);
             } else {
-                // Rollback: Free what we allocated if we run out of space
                 for &c in &allocated_clusters {
                     self.set_fat_entry(c, 0);
                 }
@@ -360,7 +351,6 @@ impl Fat32Driver {
             }
         }
 
-        // Write Data
         for i in 0..allocated_clusters.len() {
             let start = (i as usize) * (self.sectors_per_cluster as usize) * 512;
             let end = core::cmp::min(
@@ -369,13 +359,11 @@ impl Fat32Driver {
             );
             let cluster_data = &data[start..end];
 
-            // Buffer needs to be full cluster size to act as padding for the last sector
             let mut cluster_buffer = vec![0u8; (self.sectors_per_cluster * 512) as usize];
             cluster_buffer[..cluster_data.len()].copy_from_slice(cluster_data);
 
             let start_lba = self.cluster_to_lba(allocated_clusters[i]);
 
-            // Write sectors for this cluster
             for j in 0..self.sectors_per_cluster {
                 let sector_offset = (j * 512) as usize;
                 let mut sector_buf = [0u8; 512];
@@ -383,15 +371,13 @@ impl Fat32Driver {
                 self.write_sector_from_u8(start_lba + j, &sector_buf);
             }
 
-            // Link FAT Chain
             if i < allocated_clusters.len() - 1 {
                 self.set_fat_entry(allocated_clusters[i], allocated_clusters[i + 1]);
             } else {
-                self.set_fat_entry(allocated_clusters[i], 0x0FFF_FFFF); // EOF
+                self.set_fat_entry(allocated_clusters[i], 0x0FFF_FFFF);
             }
         }
 
-        // Add Directory Entry after checking if file exists
         self.add_directory_entry(filename, allocated_clusters[0], data.len() as u32)?;
 
         Ok(())
@@ -419,14 +405,12 @@ impl Fat32Driver {
         false
     }
 
-    // Helper to add the directory entry (extracted for clarity)
     fn add_directory_entry(
         &mut self,
         filename: &str,
         start_cluster: u32,
         size: u32,
     ) -> Result<(), &'static str> {
-        // 1. Format Filename (8.3 format)
         let mut name = [0x20u8; 8];
         let mut ext = [0x20u8; 3];
 
@@ -446,11 +430,9 @@ impl Fat32Driver {
             }
         }
 
-        // 2. Find free slot in root directory
         let dir_sector = self.cluster_to_lba(self.root_cluster);
         let mut dir_buf = [0u8; 512];
 
-        // Scan root cluster (Limitation: Only scans first cluster of root dir)
         self.read_sector_into_u8(dir_sector, &mut dir_buf);
 
         let mut entry_offset = 0;
@@ -468,7 +450,6 @@ impl Fat32Driver {
             return Err("Root directory full");
         }
 
-        // 3. Write Entry
         let new_entry = DirectoryEntry {
             name,
             ext,
