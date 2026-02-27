@@ -2,7 +2,6 @@ pub mod fat;
 
 use crate::drivers::ata::{AtaDrive, Bus};
 use crate::fs::fat::Fat32Driver;
-use crate::println;
 
 use spin::Mutex;
 
@@ -15,9 +14,6 @@ pub fn init_fs() {
 
     // Lock the global mutex and move the drive instance into it
     *FILESYSTEM.lock() = Some(driver);
-
-    // Optional: Print status
-    println!("[Filesystem]: FAT32 Initialized on Primary Bus");
 }
 
 pub fn read_sector(lba: u32) -> Result<[u8; 512], &'static str> {

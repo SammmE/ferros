@@ -8,7 +8,7 @@ use xmas_elf::ElfFile;
 use xmas_elf::program::{ProgramHeader, Type};
 
 use crate::fs::FILESYSTEM;
-use crate::{memory, println, syscall};
+use crate::{memory, syscall};
 
 pub fn load_elf(filename: &str) -> Result<(), String> {
     let file_data: Vec<u8> = {
@@ -26,8 +26,6 @@ pub fn load_elf(filename: &str) -> Result<(), String> {
         .as_mut()
         .ok_or("Frame allocator not initialized")?;
 
-    println!("Loading process: {}", filename);
-
     for ph in elf.program_iter() {
         if ph.get_type().map_err(|_| "Invalid Segment Type")? == Type::Load {
             let virt_addr = ph.virtual_addr();
@@ -36,7 +34,6 @@ pub fn load_elf(filename: &str) -> Result<(), String> {
             let file_offset = ph.offset();
 
             if virt_addr == 0 {
-                println!("Skipping NULL segment at offset {:#x}", ph.offset());
                 continue;
             }
 
@@ -104,11 +101,6 @@ pub fn load_elf(filename: &str) -> Result<(), String> {
             }
         }
     }
-
-    println!(
-        "Jumping to entry point: {:#x}",
-        elf.header.pt2.entry_point()
-    );
 
     drop(frame_allocator);
 

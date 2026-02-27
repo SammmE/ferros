@@ -8,15 +8,14 @@ use x86_64::VirtAddr;
 
 pub mod allocator;
 pub mod drivers;
-pub mod framebuffer;
 pub mod fs;
 pub mod gdt;
+pub mod graphics;
 pub mod interrupts;
 pub mod memory;
 pub mod panic;
 pub mod process;
 pub mod serial;
-pub mod shell;
 pub mod syscall;
 pub mod task;
 
@@ -67,8 +66,8 @@ pub fn init_all(boot_info: &'static mut BootInfo) {
     if let Some(framebuffer) = boot_info.framebuffer.as_mut() {
         let info = framebuffer.info();
         let buffer = framebuffer.buffer_mut();
-        let mut writer = framebuffer::WRITER.lock();
-        *writer = Some(framebuffer::FrameBufferWriter::new(buffer, info));
+        graphics::device::init_display(info, buffer);
+        serial_println!("[INIT] Graphics Subsystem initialized.");
     }
     serial_println!("[INIT] Framebuffer initialized.");
 

@@ -88,7 +88,7 @@ extern "x86-interrupt" fn page_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: PageFaultErrorCode,
 ) {
-    use x86_64::registers::segmentation::{Segment, CS};
+    use x86_64::registers::segmentation::{CS, Segment};
 
     serial_println!("EXCEPTION: PAGE FAULT");
     serial_println!("Accessed Address: {:?}", Cr2::read());
@@ -103,7 +103,6 @@ extern "x86-interrupt" fn page_fault_handler(
     if privilege_level == 3 {
         // User mode fault - kill the process instead of panicking
         serial_println!("User process caused a page fault. Terminating process.");
-        crate::println!("\nSegmentation Fault: Process terminated due to invalid memory access");
 
         // LIMITATION: No process management yet. In a full OS, this would terminate
         // the process and return control to the scheduler/shell. For now, we halt.
