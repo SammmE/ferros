@@ -28,6 +28,14 @@ impl DisplayDevice {
         Renderer::new(&mut self.backbuffer)
     }
 
+    pub fn width(&self) -> usize {
+        self.info.width
+    }
+
+    pub fn height(&self) -> usize {
+        self.info.height
+    }
+
     pub fn present(&mut self) {
         let width = self.info.width;
         let height = self.info.height;

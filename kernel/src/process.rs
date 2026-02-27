@@ -1,14 +1,15 @@
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use alloc::vec::Vec;
 use x86_64::{
     VirtAddr,
-    structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB},
+    structures::paging::{Page, PageTableFlags, Size4KiB},
 };
 use xmas_elf::ElfFile;
-use xmas_elf::program::{ProgramHeader, Type};
+use xmas_elf::program::Type;
 
 use crate::fs::FILESYSTEM;
-use crate::{memory, syscall};
+use crate::memory;
+use crate::memory::pmm::PMM;
 
 pub fn load_elf(filename: &str) -> Result<(), String> {
     let file_data: Vec<u8> = {
@@ -17,14 +18,12 @@ pub fn load_elf(filename: &str) -> Result<(), String> {
         fs.read_file(filename).ok_or("File not found")?
     };
 
-    let elf = ElfFile::new(&file_data).map_err(|e| "Elf parse error")?;
-    xmas_elf::header::sanity_check(&elf).map_err(|e| "ELF sanity check failed")?;
+    let elf = ElfFile::new(&file_data).map_err(|_| "Elf parse error")?;
+    xmas_elf::header::sanity_check(&elf).map_err(|_| "ELF sanity check failed")?;
 
-    let mut mapper = memory::get_mapper().ok_or("Memory map not initialized")?;
-    let mut frame_allocator = memory::FRAME_ALLOCATOR.lock();
-    let frame_allocator = frame_allocator
-        .as_mut()
-        .ok_or("Frame allocator not initialized")?;
+    let flags = PageTableFlags::PRESENT
+        | PageTableFlags::WRITABLE
+        | PageTableFlags::USER_ACCESSIBLE;
 
     for ph in elf.program_iter() {
         if ph.get_type().map_err(|_| "Invalid Segment Type")? == Type::Load {
@@ -39,24 +38,18 @@ pub fn load_elf(filename: &str) -> Result<(), String> {
 
             let start_addr = VirtAddr::new(virt_addr);
             let start_page: Page<Size4KiB> = Page::containing_address(start_addr);
-
             let end_addr = start_addr + mem_size;
             let end_page: Page<Size4KiB> = Page::containing_address(end_addr - 1u64);
 
-            let flags = PageTableFlags::PRESENT
-                | PageTableFlags::WRITABLE
-                | PageTableFlags::USER_ACCESSIBLE;
-
             for page in Page::range_inclusive(start_page, end_page) {
                 if memory::translate_addr(page.start_address()).is_none() {
-                    let frame = frame_allocator.allocate_frame().ok_or("Out of memory")?;
-
-                    unsafe {
-                        mapper
-                            .map_to(page, frame, flags, frame_allocator)
-                            .map_err(|_| "Page mapping failed")?
-                            .flush();
-                    }
+                    let frame_addr = {
+                        let mut pmm = PMM.lock();
+                        let pmm = pmm.as_mut().ok_or("PMM not initialized")?;
+                        pmm.alloc_frame().ok_or("Out of memory")?
+                    };
+                    memory::map_page(page.start_address(), frame_addr, flags)
+                        .map_err(|e| String::from(e))?;
                 }
             }
 
@@ -78,7 +71,7 @@ pub fn load_elf(filename: &str) -> Result<(), String> {
 
     let stack_start = VirtAddr::new(0x0000_7FFF_FFFF_0000);
     let stack_size_pages = 16;
-    let stack_end_page = Page::containing_address(stack_start - 1u64);
+    let stack_end_page: Page<Size4KiB> = Page::containing_address(stack_start - 1u64);
     let stack_start_page = stack_end_page - (stack_size_pages - 1) as u64;
 
     let stack_flags =
@@ -86,21 +79,17 @@ pub fn load_elf(filename: &str) -> Result<(), String> {
 
     for page in Page::range_inclusive(stack_start_page, stack_end_page) {
         if memory::translate_addr(page.start_address()).is_none() {
-            let frame = frame_allocator
-                .allocate_frame()
-                .ok_or("No frames for stack")?;
-            unsafe {
-                mapper
-                    .map_to(page, frame, stack_flags, frame_allocator)
-                    .map_err(|_| "Stack map failed")?
-                    .flush();
-            }
+            let frame_addr = {
+                let mut pmm = PMM.lock();
+                let pmm = pmm.as_mut().ok_or("PMM not initialized")?;
+                pmm.alloc_frame().ok_or("No frames for stack")?
+            };
+            memory::map_page(page.start_address(), frame_addr, stack_flags)
+                .map_err(|e| String::from(e))?;
         }
     }
 
-    drop(frame_allocator);
-
     unsafe {
-        syscall::enter_userspace(elf.header.pt2.entry_point(), stack_start.as_u64());
+        crate::syscall::enter_userspace(elf.header.pt2.entry_point(), stack_start.as_u64());
     }
 }

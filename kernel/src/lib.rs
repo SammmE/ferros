@@ -33,21 +33,10 @@ pub fn init_all(boot_info: &'static mut BootInfo) {
     serial_println!("[INIT] PIT initialized.");
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset.into_option().unwrap());
-    let mut mapper = unsafe { memory::init(phys_mem_offset) };
+    memory::init(phys_mem_offset, &boot_info.memory_regions);
 
-    let frame_allocator =
-        unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_regions) };
-
-    {
-        let mut global_allocator = memory::FRAME_ALLOCATOR.lock();
-        *global_allocator = Some(frame_allocator);
-    }
-
-    allocator::init_heap(
-        &mut mapper,
-        memory::FRAME_ALLOCATOR.lock().as_mut().unwrap(),
-    )
-    .expect("heap initialization failed");
+    let mut mapper = memory::get_mapper().expect("VMM not ready");
+    allocator::init_heap(&mut mapper).expect("heap initialization failed");
     serial_println!("[INIT] Memory & Heap initialized.");
 
     memory::unmap_null_page().expect("Failed to unmap null page");
