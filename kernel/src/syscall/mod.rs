@@ -1,9 +1,11 @@
+pub mod fs;
+pub mod process;
+
+use crate::gdt;
 use core::arch::global_asm;
 use x86_64::VirtAddr;
 use x86_64::registers::model_specific::{Efer, EferFlags, KernelGsBase, LStar, SFMask, Star};
 use x86_64::registers::rflags::RFlags;
-
-use crate::gdt;
 
 #[repr(C)]
 pub struct KernelScratch {
@@ -18,6 +20,24 @@ static mut KERNEL_SCRATCH: KernelScratch = KernelScratch {
     kernel_stack_top: 0,
     user_stack_scratch: 0,
 };
+
+macro_rules! dispatch_syscalls {
+    (
+        match $id:ident, args: ($a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident) {
+            $( $num:pat => $handler:path [ $($arg:ident as $arg_ty:ty),* ] ),* $(,)?
+        }
+    ) => {
+        match $id {
+            $(
+                $num => $handler( $($arg as $arg_ty),* ) as usize,
+            )*
+            _ => {
+                crate::serial_println!("Unknown Syscall ID: {}", $id);
+                usize::MAX
+            }
+        }
+    };
+}
 
 pub fn init_syscall() {
     unsafe {
@@ -76,10 +96,10 @@ extern "C" fn syscall_rust_handler(
     syscall_id: usize,
     arg1: usize,
     arg2: usize,
-    _arg3: usize,
-    _arg4: usize,
-    _arg5: usize,
-    _arg6: usize,
+    arg3: usize,
+    arg4: usize,
+    arg5: usize,
+    arg6: usize,
 ) -> usize {
     crate::serial_println!(
         "SYSCALL: ID={}, arg1={:#x}, arg2={:#x}",
@@ -88,7 +108,13 @@ extern "C" fn syscall_rust_handler(
         arg2
     );
 
-    return 0;
+    dispatch_syscalls! {
+        match syscall_id, args: (arg1, arg2, arg3, arg4, arg5, arg6) {
+            0 => fs::sys_read[arg1 as usize, arg2 as *mut u8, arg3 as usize],
+            1 => fs::sys_write[arg1 as usize, arg2 as *const u8, arg3 as usize],
+            60 => process::sys_exit[arg1 as usize],
+        }
+    }
 }
 
 global_asm!(include_str!("syscall_asm.asm"));
