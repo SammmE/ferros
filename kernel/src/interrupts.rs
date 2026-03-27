@@ -12,6 +12,10 @@ pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 pub static PICS: Mutex<ChainedPics> =
     Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
+unsafe extern "C" {
+    fn timer_interrupt_stub();
+}
+
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
@@ -23,9 +27,11 @@ lazy_static! {
             idt.double_fault
                 .set_handler_fn(double_fault_handler)
                 .set_stack_index(crate::gdt::DOUBLE_FAULT_IST_INDEX);
+
+            idt[InterruptIndex::Timer.as_u8()]
+                .set_handler_addr(x86_64::VirtAddr::new(timer_interrupt_stub as usize as u64));
         }
 
-        idt[InterruptIndex::Timer.as_u8()].set_handler_fn(timer_interrupt_handler);
         idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
 
         idt
@@ -40,10 +46,10 @@ pub enum InterruptIndex {
 }
 
 impl InterruptIndex {
-    fn as_u8(self) -> u8 {
+    pub fn as_u8(self) -> u8 {
         self as u8
     }
-    fn as_usize(self) -> usize {
+    pub fn as_usize(self) -> usize {
         self as u8 as usize
     }
 }
