@@ -1,5 +1,6 @@
-use alloc::string::String;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
+use alloc::{collections::btree_map::BTreeMap, string::String};
 use x86_64::{
     VirtAddr,
     registers::control::Cr3,
@@ -10,9 +11,13 @@ use xmas_elf::program::Type;
 
 use crate::memory;
 use crate::memory::pmm::PMM;
+use crate::process::KernelObject;
 use crate::{fs::FILESYSTEM, process::Process};
 
-pub fn load_elf(filename: &str) -> Result<Process, String> {
+pub fn load_elf(
+    filename: &str,
+    inherited_fds: BTreeMap<usize, Arc<dyn KernelObject>>,
+) -> Result<Process, String> {
     let file_data: Vec<u8> = {
         let mut fs_lock = FILESYSTEM.lock();
         let fs = fs_lock.as_mut().ok_or("Filesystem not initialized")?;
@@ -107,7 +112,13 @@ pub fn load_elf(filename: &str) -> Result<Process, String> {
     let entry_point = elf.header.pt2.entry_point();
     let user_stack_top = 0x0000_7FFF_FFFF_0000;
 
-    let process = Process::new(entry_point, user_stack_top, pml4_phys, kernel_stack);
+    let process = Process::new(
+        entry_point,
+        user_stack_top,
+        pml4_phys,
+        kernel_stack,
+        inherited_fds,
+    );
 
     Ok(process)
 }

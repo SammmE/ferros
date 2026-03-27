@@ -42,6 +42,7 @@ impl Process {
         user_stack_top: u64,
         page_table_phys: PhysAddr,
         kstack_top: VirtAddr,
+        inherited_fds: BTreeMap<usize, Arc<dyn KernelObject>>,
     ) -> Process {
         let (user_code, user_data) = crate::gdt::get_user_selectors();
 
@@ -70,7 +71,7 @@ impl Process {
             saved_rsp: kstack_ptr,
             page_table: page_table_phys,
             kstack_top,
-            fd_table: Mutex::new(BTreeMap::new()),
+            fd_table: Mutex::new(inherited_fds),
         }
     }
 }
