@@ -90,4 +90,8 @@ impl ProcessId {
         static NEXT_ID: AtomicU64 = AtomicU64::new(0);
         ProcessId(NEXT_ID.fetch_add(1, Ordering::Relaxed))
     }
+
+    pub fn as_u64(&self) -> u64 {
+        self.0
+    }
 }

@@ -1,4 +1,5 @@
 pub mod fs;
+pub mod memory;
 pub mod process;
 
 use crate::gdt;
@@ -110,9 +111,22 @@ extern "C" fn syscall_rust_handler(
 
     dispatch_syscalls! {
         match syscall_id, args: (arg1, arg2, arg3, arg4, arg5, arg6) {
+            // File I/O
             0 => fs::sys_read[arg1 as usize, arg2 as *mut u8, arg3 as usize],
             1 => fs::sys_write[arg1 as usize, arg2 as *const u8, arg3 as usize],
+            2 => fs::sys_open[arg1 as *const u8, arg2 as usize, arg3 as usize],
+            3 => fs::sys_close[arg1 as usize],
+            7 => fs::sys_poll[arg1 as *mut PollFd, arg2 as usize, arg3 as usize],
+            22 => fs::sys_pipe[arg1 as *mut usize],
+
+            // Memory
+            9 => memory::sys_mmap[arg1 as usize, arg2 as usize, arg3 as usize, arg4 as usize, arg5 as usize, arg6 as usize],
+
+            // Process
+            24 => process::sys_yield[],
             60 => process::sys_exit[arg1 as usize],
+            61 => process::sys_wait[arg1 as usize, arg2 as *mut usize],
+            1000 => process::sys_spawn[arg1 as *const u8, arg2 as usize],
         }
     }
 }
