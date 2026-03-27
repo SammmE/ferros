@@ -1,23 +1,48 @@
-use crate::serial_println;
+use core::slice;
+
+use crate::{process::scheduler::SCHEDULER, serial_println};
 
 pub fn sys_read(fd: usize, buf: *mut u8, count: usize) -> usize {
-    todo!("Implement sys_read");
-    0
+    let object = {
+        let scheduler = SCHEDULER.lock();
+        let current_pid = scheduler
+            .current_process
+            .expect("sys_read called without active process");
+        let process = scheduler.processes.get(&current_pid).unwrap();
+
+        let fd_table = process.fd_table.lock();
+        match fd_table.get(&fd) {
+            Some(obj) => obj.clone(),
+            None => {
+                serial_println!("sys_read error: Invalid FD {}", fd);
+                return usize::MAX; // -1 error code
+            }
+        }
+    };
+
+    let buffer_slice = unsafe { slice::from_raw_parts_mut(buf, count) };
+    object.read(buffer_slice)
 }
 
 pub fn sys_write(fd: usize, buf: *const u8, count: usize) -> usize {
-    serial_println!(
-        "sys_write called: fd={}, buf={:p}, count={}",
-        fd,
-        buf,
-        count
-    );
+    let object = {
+        let scheduler = SCHEDULER.lock();
+        let current_pid = scheduler
+            .current_process
+            .expect("sys_write called without active process");
+        let process = scheduler.processes.get(&current_pid).unwrap();
 
-    todo!("verify buf");
-    let slice = unsafe { core::slice::from_raw_parts(buf, count) };
-    if let Ok(s) = core::str::from_utf8(slice) {
-        serial_println!("Userspace says: {}", s);
-    }
+        let fd_table = process.fd_table.lock();
+        match fd_table.get(&fd) {
+            Some(obj) => obj.clone(),
+            None => {
+                serial_println!("sys_write error: Invalid FD {}", fd);
+                return usize::MAX; // -1 error code
+            }
+        }
+    }; // <-- Locks dropped here
 
-    count // Return number of bytes written
+    let buffer_slice = unsafe { slice::from_raw_parts(buf, count) };
+
+    object.write(buffer_slice)
 }

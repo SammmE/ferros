@@ -60,6 +60,40 @@ impl Scheduler {
 
         next_process.saved_rsp // RETURN TO ASSEMBLY
     }
+
+    pub fn exit_current() -> ! {
+        let next_rsp = {
+            let mut scheduler = SCHEDULER.lock();
+
+            let current_id = scheduler
+                .current_process
+                .take()
+                .expect("No process to exit");
+
+            let _dead_process = scheduler.processes.remove(&current_id).unwrap();
+
+            // TODO: Call the PMM/VMM to free _dead_process.page_table and kstack_top
+
+            let next_id = scheduler
+                .ready_queue
+                .pop_front()
+                .expect("System Halted: All processes are dead.");
+
+            scheduler.current_process = Some(next_id);
+            let next_process = scheduler.processes.get_mut(&next_id).unwrap();
+            next_process.state = State::Running;
+
+            unsafe {
+                crate::memory::switch_address_space(next_process.page_table);
+            }
+
+            next_process.saved_rsp
+        }; // <- Mutex lock is dropped here
+
+        unsafe {
+            restore_context(next_rsp);
+        }
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -71,4 +105,8 @@ pub extern "C" fn process_schedule_next(old_stack_ptr: u64) -> u64 {
     }
 
     Scheduler::schedule_next(old_stack_ptr)
+}
+
+unsafe extern "C" {
+    fn restore_context(new_stack_ptr: u64) -> !;
 }
